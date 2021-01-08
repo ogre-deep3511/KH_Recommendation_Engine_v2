@@ -1,0 +1,37 @@
+<h3>Kahanies Recommendation</h3>
+<form method="post" action="/kahani/recommendation">
+    <label>User ID</label><br>
+    <input type="text" name="user_id">
+    <br>
+    <label>email ID</label><br>
+    <input type="text" name="email_id">
+    <br>
+    <label>Title ID</label><br>
+    <input type="text" name="title_id">
+    <br>
+    <label>Language Preference</label><br>
+    <input type="text" name="language">
+    <br><br>
+    <input type="submit" value="Submit">
+</form>
+
+<h3>Users</h3>
+<ul>
+    <% users.forEach((user) => { %>
+        <li><%= user.user_id %></li>
+    <% }) %>
+</ul>
+
+<h3>Genres</h3>
+<ul>
+    <% genres.forEach((genre) => { %>
+        <li><%= genre.name %></li>
+    <% }) %>
+</ul>
+
+<h3>Kahanies</h3>
+<ul>
+    <% kahanies.forEach((kahani) => { %>
+        <li><%= kahani.title %></li>
+    <% }) %>
+</ul>

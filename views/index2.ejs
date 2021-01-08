@@ -1,0 +1,32 @@
+<h3>Story By Genre Recommendation</h3>
+<ul>
+    <% kahaniesByGenre.forEach((story) => { %>
+        <li><%= story.title %></li>
+        <li><%= story.views_count %></li>
+    <% }) %>
+</ul>
+
+<h3>Story By Language Recommendation</h3>
+<ul>
+    <% kahaniesByLanguage.forEach((story) => { %>
+        <li><%= story.title %></li>
+        <li><%= story.views_count %></li>
+    <% }) %>
+</ul>
+
+<h3>Story By Author Recommendation</h3>
+<ul>
+    <% kahaniesWrittenBy.forEach((story) => { %>
+        <li><%= story.title %></li>
+        <li><%= story.views_count %></li>
+    <% }) %>
+</ul>
+
+<h3>Story By Author Following Recommendation</h3>
+<ul>
+    <% storiesByAuthorFollowing.forEach((story) => { %>
+        <li><%= story.title %></li>
+        <li><%= story.views_count %></li>
+    <% }) %>
+</ul>
+
