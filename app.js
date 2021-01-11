@@ -19,7 +19,7 @@ app.use(bodyParser.urlencoded({extended: false}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 //Setting up neo4j authentication
-const driver = neo4j.driver('bolt://localhost:7687', neo4j.auth.basic('neo4j', '1241@deep'));
+const driver = neo4j.driver('bolt://localhost:11007', neo4j.auth.basic('neo4j', '1241@deep'));
 const session = driver.session();
 
 // This is for displaying all the user data, genre data and kahani data from the neo4j database
@@ -88,189 +88,167 @@ app.post('/kahani/recommendation', (req, res) => {
 
     // Getting user id and title id from the front-end(Assuming user reads this story)
     var user_id = req.body.user_id;
-    var title_id = req.body.title_id;
+    var kahani_id = req.body.kahani_id;
     
     // Setting weightage for parameters
     const GENRE_WEIGHTAGE = 3;
-    const LANGUAGE_WEIGHTAGE = 3;
+    const POPULARITY_WEIGHTAGE = 3;
     const AUTHOR_WEIGHTAGE = 2;
     const FOLLOWING_WEIGHTAGE = 2;
 
     session
-        // Getting the details(particularly writing_style of the story) of the story user is reading
-        .run('MATCH(a:Kahani {title_id: $title_idParam}) return a', {title_idParam: title_id})
+        // Getting the details(particularly writing_style, language and genre of the story) of the story user is reading
+        .run('MATCH(a:Story {kahani_id: $kahani_idParam}), (b:Kahani) where a.kahani_id = b.kahani_id return b', {kahani_idParam: kahani_id})
         .then((result) => {
-            var style;
+            var writing_style;
+            var language;
+            var genre;
             result.records.forEach((record) => {
-                style = record._fields[0].properties.writing_style;
+                writing_style = record._fields[0].properties.writing_style;
+                language = record._fields[0].properties.language;
+                genre = record._fields[0].properties.genre;
             });
-            console.log(style);
+            // console.log(style);
             
             session
                 // Getting all the stories which belongs to the genre of the story user is reading
-                .run('MATCH(a:Kahani {title_id: $title_idParam})-[:BELONGS_TO]->(g)<-[:BELONGS_TO]-(k) return k order by k.views_count desc', {title_idParam: title_id})
+                .run('match(a:Story {kahani_id: $kahani_idParam})-[:BELONGS_TO_KAHANI]->(k)-[:IS_OF_GENRE]->(g)<-[:IS_OF_GENRE]-(s)<-[:BELONGS_TO_KAHANI]-(m) return m order by m.views_count desc', {kahani_idParam: kahani_id})
                 .then((result) => {
-                    var kahaniesByGenreArr = [];
-                    // Inserting data into kahaniesByGenreArr afetr filtering by views count
+                    var storiesByGenreArr = [];
+                    // Inserting data into storiesByGenreArr afetr filtering by views count
                     result.records.forEach((record) => {
-                        if(record._fields[0].properties.writing_style == style) {
-                            kahaniesByGenreArr.push({
+                            storiesByGenreArr.push({
                                 title: record._fields[0].properties.title,
                                 views_count: record._fields[0].properties.views_count
                             });
-                        }
                     });
 
                     session
-                        // Getting all the stories which belongs to the language of the story user is reading
-                        .run('MATCH(a:Kahani {title_id: $title_idParam})-[:OF_LANGUAGE]->(l)<-[:OF_LANGUAGE]-(k) return k order by k.views_count desc', {title_idParam: title_id})
+                        // Getting all the stories which is written by the author of the story user is reading
+                        .run('match(s:Story {kahani_id: $kahani_idParam})<-[:HAS_WRITTEN]-(a)-[:HAS_WRITTEN]->(s1) return s1 order by s1.views_count desc', {kahani_idParam: kahani_id})
                         .then((result) => {
-                            var kahaniesByLanguageArr = [];
-                            // Inserting data into kahaniesByLanguageArr after filtering by views count
+                            var storiesWrittenByAuthorArr = [];
+                            // Inserting data into storiesWrittenByAuthorArr after filtering by views count
                             result.records.forEach((record) => {
-                                if(record._fields[0].properties.writing_style == style) {
-                                    kahaniesByLanguageArr.push({
+                                    storiesWrittenByAuthorArr.push({
                                         title: record._fields[0].properties.title,
                                         views_count: record._fields[0].properties.views_count
                                     });
-                                }
                             });
 
                             session
-                                // Getting all the stories which is written by the author of the story user is reading
-                                .run('MATCH(a:Kahani {title_id: $title_idParam})<-[:HAS_WRITTEN_KAHANI]-(u)-[:HAS_WRITTEN_KAHANI]->(k) return k order by k.views_count desc', {title_idParam: title_id})
+                                // Getting all the stories which is written by the author user is following
+                                .run('MATCH(u:User {user_id: $user_idParam})-[:FOLLOWS]-(u1)-[:HAS_WRITTEN]-(s) return s order by s.views_count desc', {user_idParam: user_id})
                                 .then((result) => {
-                                    var kahaniesWrittenByArr = [];
-                                    // Inserting data into kahaniesWrittenByArr after filtering by views count
+                                    var storiesByAuthorFollowingArr = [];
+                                    // Inserting data into storiesByAuthorFollowingArr after filtering by views count
                                     result.records.forEach((record) => {
-                                        if(record._fields[0].properties.writing_style == style) {
-                                            kahaniesWrittenByArr.push({
-                                                title: record._fields[0].properties.title,
-                                                views_count: record._fields[0].properties.views_count
-                                            });
-                                        }
+                                        storiesByAuthorFollowingArr.push({
+                                            title: record._fields[0].properties.title,
+                                            views_count: record._fields[0].properties.views_count
+                                        });
                                     });
 
                                     session
-                                        // Getting all the stories which is written by the author user is following
-                                        .run('MATCH(a:User {user_id: $user_idParam})-[:FOLLOWS]->(u)-[:HAS_WRITTEN]->(s) return s order by s.views_count desc', {user_idParam: user_id})
+                                        // Getting all the stories which has total views greater than the threshold
+                                        .run('MATCH(a:Story), (b:StoryViews) where (a)-[:HAS_VIEWS]->(b) AND b.totalViews > 5 return a order by a.views_count desc')
                                         .then((result) => {
-                                            var storiesByAuthorFollowingArr = [];
-                                            // Inserting data into storiesByAuthorFollowingArr after filtering by views count
+                                            var storiesByViewsArr = [];
+                                            // Inserting data into storiesByViewsArr
                                             result.records.forEach((record) => {
-                                                storiesByAuthorFollowingArr.push({
-                                                    title: record._fields[0].properties.title,
-                                                    views_count: record._fields[0].properties.views_count
+                                                storiesByViewsArr.push({
+                                                    title: record._fields[0].properties.title
                                                 });
                                             });
 
-                                            // console.log(kahaniesByGenreArr.length);
-                                            // console.log(kahaniesByLanguageArr);
-                                            // console.log(kahaniesWrittenByArr);
-                                            // console.log(storiesByAuthorFollowingArr);
-
-                                            var preFinalArray = [];
-                                            var finalArr = [];
-                                            var flag = 0;
-
-                                            for(let i = 0; i < (kahaniesByGenreArr.length / 2); i++) {
-                                                // Calculating weight for every story present in the kahaniesByGenreArr
-                                                let weightDistributor = GENRE_WEIGHTAGE / (kahaniesByGenreArr.length - 1);
-                                                if(kahaniesByGenreArr.length > 0) {
-                                                    preFinalArray.push({
-                                                        title: kahaniesByGenreArr[i].title,
-                                                        // Calculating and setting weightage for priority 
-                                                        priority: kahaniesByGenreArr[i].views_count * weightDistributor
+                                            session
+                                                // Getting all the stories which has total reads greater than the threshold
+                                                .run('MATCH(a:Story), (b:StoryReads) where (a)-[:HAS_READS]->(b) AND b.totalReads > 5 return a order by a.views_count desc')
+                                                .then((result) => {
+                                                    var storiesByReadsArr = [];
+                                                    // Inserting data into storiesByReadsArr
+                                                    result.records.forEach((record) => {
+                                                        storiesByReadsArr.push({
+                                                            title: record._fields[0].properties.title
+                                                        });
                                                     });
-                                                }
-                                            }
 
-                                            for(let i = 0; i < (kahaniesByLanguageArr.length / 2); i++) {
-                                                // Calculating weight for every story present in the kahaniesByLanguageArr
-                                                let weightDistributor = LANGUAGE_WEIGHTAGE / (kahaniesByLanguageArr.length - 1);
-                                                if(kahaniesByLanguageArr.length > 0) {
-                                                    preFinalArray.push({
-                                                        title: kahaniesByLanguageArr[i].title,
-                                                        // Calculating and setting weightage for priority
-                                                        priority: kahaniesByLanguageArr[i].views_count * weightDistributor
-                                                    });
-                                                }
-                                            }
+                                                    session
+                                                        // Getting all the stories which has total rating greater than the threshold
+                                                        .run('MATCH(a:Story), (b:TotalRating) where (a)-[:HAS_TOTAL_RATING]->(b) AND b.totalRating > 5 return a order by a.views_count desc')
+                                                        .then((result) => {
+                                                            var storiesByRatingArr = [];
+                                                            // Inserting data into storiesByRatingArr 
+                                                            result.records.forEach((record) => {
+                                                                storiesByRatingArr.push({
+                                                                    title: record._fields[0].properties.title
+                                                                });
+                                                            });
 
-                                            for(let i = 0; i < (kahaniesWrittenByArr.length / 2); i++) {
-                                                // Calculating weight for every story present in the kahaniesWrittenByArr
-                                                let weightDistributor = AUTHOR_WEIGHTAGE / (kahaniesWrittenByArr.length - 1);
-                                                if(kahaniesWrittenByArr.length > 0) {
-                                                    preFinalArray.push({
-                                                        title: kahaniesWrittenByArr[i].title,
-                                                        // Calculating and setting weightage for priority
-                                                        priority: kahaniesWrittenByArr[i].views_count * weightDistributor
-                                                    });
-                                                }
-                                            }
+                                                            session
+                                                                // Getting all the stories which has total comments greater than the threshold
+                                                                .run('MATCH(a:Story), (b:TotalComment) where (a)-[:HAS_COMMENT]->(b) AND b.totalComment > 5 return a order by a.views_count desc')
+                                                                .then((result) => {
+                                                                    var storiesByCommentArr = [];
+                                                                    // Inserting data into storiesByCommentArr
+                                                                    result.records.forEach((record) => {
+                                                                        storiesByCommentArr.push({
+                                                                            title: record._fields[0].properties.title
+                                                                        });
+                                                                    });
 
-                                            for(let i = 0; i < (storiesByAuthorFollowingArr.length / 2); i++) {
-                                                // Calculating weight for every story present in the storiesByAuthorFollowingArr
-                                                let weightDistributor = FOLLOWING_WEIGHTAGE / (storiesByAuthorFollowingArr.length - 1);
-                                                if(storiesByAuthorFollowingArr.length > 0) {
-                                                    preFinalArray.push({
-                                                        title: storiesByAuthorFollowingArr[i].title,
-                                                        // Calculating and setting weightage for priority
-                                                        priority: storiesByAuthorFollowingArr[i].views_count * weightDistributor
-                                                    });
-                                                }
-                                            }
+                                                                    session
+                                                                        // Getting all the stories which has total purchases greater than the threshold
+                                                                        .run('MATCH(a:Story), (b:TotalPurchase) where (a)-[:HAS_PURCHASES]->(b) AND b.totalPurchase > 5 return a order by a.views_count desc')
+                                                                        .then((result) => {
+                                                                            var storiesByPurchaseArr = [];
+                                                                            // Inserting data into storiesByPurchaseArr
+                                                                            result.records.forEach((record) => {
+                                                                                storiesByPurchaseArr.push({
+                                                                                    title: record._fields[0].properties.title
+                                                                                });
+                                                                            });
 
-                                            // console.log(preFinalArray);
+                                                                            console.log(storiesByGenreArr);
+                                                                            console.log(storiesWrittenByAuthorArr);
+                                                                            console.log(storiesByAuthorFollowingArr);
+                                                                            console.log(storiesByViewsArr);
+                                                                            console.log(storiesByReadsArr);
+                                                                            console.log(storiesByRatingArr);
+                                                                            console.log(storiesByCommentArr);
+                                                                            console.log(storiesByPurchaseArr);
 
-                                            // Inserting identical stories which is repeated in the preFinalArray to the finalArr
-                                            for(let i = 0; i < preFinalArray.length; i++) {
-                                                for(let j = (i + 1); j < preFinalArray.length; j++) {
-                                                    if(preFinalArray[i].title == preFinalArray[j].title && preFinalArray[i].title != 0) {
-                                                        flag = 1;
-                                                        preFinalArray[j].title = 0;
-                                                    }
-                                                }
-                                                if(flag == 1) {
-                                                    finalArr.push(preFinalArray[i].title);
-                                                    preFinalArray[i].title = 0;
-                                                    flag = 0;
-                                                }
-                                            }
-
-                                            // console.log(preFinalArray);
-                                            // console.log(finalArr);
-
-                                            // Inserting all the remaining stories from the preFinalArray to the finalArr
-                                            for(let i = 0; i < preFinalArray.length; i++) {
-                                                if(preFinalArray[i].title != 0 && preFinalArray[i].priority >= 10) {
-                                                    finalArr.push(preFinalArray[i].title);
-                                                }
-                                            }
-
-                                            // console.log(finalArr);
-
-                                            res.render('finalRecommendation', {
-                                                // kahaniesByGenre: kahaniesByGenreArr,
-                                                // kahaniesByLanguage: kahaniesByLanguageArr,
-                                                // kahaniesWrittenBy: kahaniesWrittenByArr,
-                                                // storiesByAuthorFollowing: storiesByAuthorFollowingArr,
-                                                final: finalArr
-                                            });
-
+                                                                        })
+                                                                        .catch((err) => {
+                                                                            console.log(err);
+                                                                        })
+                                                                })
+                                                                .then((err) => {
+                                                                    console.log(err);
+                                                                })
+                                                        })
+                                                        .catch((err) => {
+                                                            console.log(err);
+                                                        })
+                                                })
+                                                .catch((err) => {
+                                                    console.log(err);
+                                                })
                                         })
                                         .catch((err) => {
                                             console.log(err);
-                                        });
+                                        })
 
                                 })
                                 .catch((err) => {
                                     console.log(err);
                                 });
+
                         })
                         .catch((err) => {
                             console.log(err);
                         });
+                        
                 })
                 .catch((err) => {
                     console.log(err);
