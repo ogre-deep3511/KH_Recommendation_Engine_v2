@@ -24,63 +24,7 @@ const session = driver.session();
 
 // This is for displaying all the user data, genre data and kahani data from the neo4j database
 app.get('/', (req, res) => {
-    session
-        //Fetching User's data from the database
-        .run('match(n:User) return n')
-        .then((result) => {
-            let userArray = [];
-            //Inserting data into userArray array
-            result.records.forEach((record) => {
-                userArray.push({
-                    id: record._fields[0].identity.low,
-                    user_id: record._fields[0].properties.user_id
-                });
-            });
-
-            session
-                //Fetching Genre's data from database
-                .run('match(n:Genre) return n')
-                .then((result) => {
-                    let genreArray = [];
-                    //Inserting data into genreArray
-                    result.records.forEach((record) => {
-                        genreArray.push({
-                            id: record._fields[0].identity.low,
-                            name: record._fields[0].properties.name
-                        });
-                    });
-
-                    session
-                        //Fetching Kahanies data from database
-                        .run('match(n:Kahani) return n')
-                        .then((result) => {
-                            let kahaniArray = [];
-                            //Inserting data into kahaniAray array
-                            result.records.forEach((record) => {
-                                kahaniArray.push({
-                                    id: record._fields[0].identity.low,
-                                    title: record._fields[0].properties.title
-                                });
-                            });
-
-                            //Rendering data to the homepage
-                            res.render('index', {
-                                users: userArray,
-                                genres: genreArray,
-                                kahanies: kahaniArray
-                            });
-                        })
-                        .catch((err) => {
-                            console.log(err);
-                        })
-                })
-                .catch((err) => {
-                    console.log(err);
-                })
-        })
-        .catch((err) => {
-            console.log(err);
-        });
+    res.render('index');
 })
 
 // Method for Story recommendation
@@ -112,47 +56,54 @@ app.post('/kahani/recommendation', (req, res) => {
             
             session
                 // Getting all the stories which belongs to the genre of the story user is reading
-                .run('match(a:Story {kahani_id: $kahani_idParam})-[:BELONGS_TO_KAHANI]->(k)-[:IS_OF_GENRE]->(g)<-[:IS_OF_GENRE]-(s)<-[:BELONGS_TO_KAHANI]-(m) return m order by m.views_count desc', {kahani_idParam: kahani_id})
+                .run('match(a:Story {kahani_id: $kahani_idParam})-[:BELONGS_TO_KAHANI]->(k)-[:IS_OF_GENRE]->(g)<-[:IS_OF_GENRE]-(s)<-[:BELONGS_TO_KAHANI]-(m) return m order by m.views_count desc limit 25', {kahani_idParam: kahani_id})
                 .then((result) => {
+                    console.log("Started process 1");
                     var storiesByGenreArr = [];
                     // Inserting data into storiesByGenreArr afetr filtering by views count
                     result.records.forEach((record) => {
                             storiesByGenreArr.push({
-                                title: record._fields[0].properties.title,
-                                views_count: record._fields[0].properties.views_count
+                                title: record._fields[0].properties.title
                             });
                     });
 
+                    console.log(storiesByGenreArr);
+
                     session
                         // Getting all the stories which is written by the author of the story user is reading
-                        .run('match(s:Story {kahani_id: $kahani_idParam})<-[:HAS_WRITTEN]-(a)-[:HAS_WRITTEN]->(s1) return s1 order by s1.views_count desc', {kahani_idParam: kahani_id})
+                        .run('match(s:Story {kahani_id: $kahani_idParam})<-[:HAS_WRITTEN]-(a)-[:HAS_WRITTEN]->(s1) return s1 order by s1.views_count desc limit 25', {kahani_idParam: kahani_id})
                         .then((result) => {
+                            console.log("Started process 2")
                             var storiesWrittenByAuthorArr = [];
                             // Inserting data into storiesWrittenByAuthorArr after filtering by views count
                             result.records.forEach((record) => {
                                     storiesWrittenByAuthorArr.push({
                                         title: record._fields[0].properties.title,
-                                        views_count: record._fields[0].properties.views_count
                                     });
                             });
 
+                            console.log(storiesWrittenByAuthorArr);
+
                             session
                                 // Getting all the stories which is written by the author user is following
-                                .run('MATCH(u:User {user_id: $user_idParam})-[:FOLLOWS]-(u1)-[:HAS_WRITTEN]-(s) return s order by s.views_count desc', {user_idParam: user_id})
+                                .run('MATCH(u:User {user_id: $user_idParam})-[:FOLLOWS]-(u1)-[:HAS_WRITTEN]-(s) return s order by s.views_count desc limit 25', {user_idParam: user_id})
                                 .then((result) => {
+                                    console.log("Started process 3");
                                     var storiesByAuthorFollowingArr = [];
                                     // Inserting data into storiesByAuthorFollowingArr after filtering by views count
                                     result.records.forEach((record) => {
                                         storiesByAuthorFollowingArr.push({
                                             title: record._fields[0].properties.title,
-                                            views_count: record._fields[0].properties.views_count
                                         });
                                     });
 
+                                    console.log(storiesByAuthorFollowingArr);
+
                                     session
                                         // Getting all the stories which has total views greater than the threshold
-                                        .run('MATCH(a:Story), (b:StoryViews) where (a)-[:HAS_VIEWS]->(b) AND b.totalViews > 5 return a order by a.views_count desc')
+                                        .run('MATCH(a:Story), (b:StoryViews) where (a)-[:HAS_VIEWS]->(b) AND b.totalViews > 5 return a order by a.views_count desc limit 25')
                                         .then((result) => {
+                                            console.log("Started process 4");
                                             var storiesByViewsArr = [];
                                             // Inserting data into storiesByViewsArr
                                             result.records.forEach((record) => {
@@ -161,10 +112,13 @@ app.post('/kahani/recommendation', (req, res) => {
                                                 });
                                             });
 
+                                            console.log(storiesByViewsArr);
+
                                             session
                                                 // Getting all the stories which has total reads greater than the threshold
-                                                .run('MATCH(a:Story), (b:StoryReads) where (a)-[:HAS_READS]->(b) AND b.totalReads > 5 return a order by a.views_count desc')
+                                                .run('MATCH(a:Story), (b:StoryReads) where (a)-[:HAS_READS]->(b) AND b.totalReads > 5 return a order by a.views_count desc limit 25')
                                                 .then((result) => {
+                                                    console.log("Started process 5");
                                                     var storiesByReadsArr = [];
                                                     // Inserting data into storiesByReadsArr
                                                     result.records.forEach((record) => {
@@ -173,10 +127,13 @@ app.post('/kahani/recommendation', (req, res) => {
                                                         });
                                                     });
 
+                                                    console.log(storiesByReadsArr);
+
                                                     session
                                                         // Getting all the stories which has total rating greater than the threshold
-                                                        .run('MATCH(a:Story), (b:TotalRating) where (a)-[:HAS_TOTAL_RATING]->(b) AND b.totalRating > 5 return a order by a.views_count desc')
+                                                        .run('MATCH(a:Story), (b:TotalRating) where (a)-[:HAS_TOTAL_RATING]->(b) AND b.totalRating > 5 return a order by a.views_count desc limit 25')
                                                         .then((result) => {
+                                                            console.log("Started process 6");
                                                             var storiesByRatingArr = [];
                                                             // Inserting data into storiesByRatingArr 
                                                             result.records.forEach((record) => {
@@ -185,10 +142,13 @@ app.post('/kahani/recommendation', (req, res) => {
                                                                 });
                                                             });
 
+                                                            console.log(storiesByRatingArr);
+
                                                             session
                                                                 // Getting all the stories which has total comments greater than the threshold
-                                                                .run('MATCH(a:Story), (b:TotalComment) where (a)-[:HAS_COMMENT]->(b) AND b.totalComment > 5 return a order by a.views_count desc')
+                                                                .run('MATCH(a:Story), (b:TotalComment) where (a)-[:HAS_COMMENT]->(b) AND b.totalComment > 5 return a order by a.views_count desc limit 25')
                                                                 .then((result) => {
+                                                                    console.log("Started process 7");
                                                                     var storiesByCommentArr = [];
                                                                     // Inserting data into storiesByCommentArr
                                                                     result.records.forEach((record) => {
@@ -197,10 +157,13 @@ app.post('/kahani/recommendation', (req, res) => {
                                                                         });
                                                                     });
 
+                                                                    console.log(storiesByCommentArr);
+
                                                                     session
                                                                         // Getting all the stories which has total purchases greater than the threshold
-                                                                        .run('MATCH(a:Story), (b:TotalPurchase) where (a)-[:HAS_PURCHASES]->(b) AND b.totalPurchase > 5 return a order by a.views_count desc')
+                                                                        .run('MATCH(a:Story), (b:TotalPurchase) where (a)-[:HAS_PURCHASES]->(b) AND b.totalPurchase > 5 return a order by a.views_count desc limit 25')
                                                                         .then((result) => {
+                                                                            console.log("Started process 8");
                                                                             var storiesByPurchaseArr = [];
                                                                             // Inserting data into storiesByPurchaseArr
                                                                             result.records.forEach((record) => {
@@ -209,54 +172,64 @@ app.post('/kahani/recommendation', (req, res) => {
                                                                                 });
                                                                             });
 
-                                                                            console.log(storiesByGenreArr);
-                                                                            console.log(storiesWrittenByAuthorArr);
-                                                                            console.log(storiesByAuthorFollowingArr);
-                                                                            console.log(storiesByViewsArr);
-                                                                            console.log(storiesByReadsArr);
-                                                                            console.log(storiesByRatingArr);
-                                                                            console.log(storiesByCommentArr);
                                                                             console.log(storiesByPurchaseArr);
+
+                                                                            // console.log(storiesByGenreArr);
+                                                                            // console.log(storiesWrittenByAuthorArr);
+                                                                            // console.log(storiesByAuthorFollowingArr);
+                                                                            // console.log(storiesByViewsArr);
+                                                                            // console.log(storiesByReadsArr);
+                                                                            // console.log(storiesByRatingArr);
+                                                                            // console.log(storiesByCommentArr);
+                                                                            // console.log(storiesByPurchaseArr);
 
                                                                         })
                                                                         .catch((err) => {
                                                                             console.log(err);
                                                                         })
+                                                                        // .then(() => session.close())
                                                                 })
-                                                                .then((err) => {
+                                                                .catch((err) => {
                                                                     console.log(err);
                                                                 })
+                                                                // .then(() => session.close())
                                                         })
                                                         .catch((err) => {
                                                             console.log(err);
                                                         })
+                                                        // .then(() => session.close())
                                                 })
                                                 .catch((err) => {
                                                     console.log(err);
                                                 })
+                                                // .then(() => session.close())
                                         })
                                         .catch((err) => {
                                             console.log(err);
                                         })
+                                        // .then(() => session.close())
 
                                 })
                                 .catch((err) => {
                                     console.log(err);
-                                });
+                                })
+                                // .then(() => session.close())
 
                         })
                         .catch((err) => {
                             console.log(err);
-                        });
-                        
+                        })
+                        // .then(() => session.close())
                 })
                 .catch((err) => {
                     console.log(err);
-                });
+                })
+                // .then(() => session.close())
         })
         .catch((err) => {
             console.log(err);
-        });
+        })
+        // .then(() => session.close())
 });
 
 

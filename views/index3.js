@@ -1,4 +1,4 @@
-<h3>Kahanies Recommendation One</h3>
+<h3>Kahanies Recommendation</h3>
 <form method="post" action="/kahani/recommendation">
     <label>User ID</label><br>
     <input type="text" name="user_id">
@@ -14,6 +14,3 @@
     <br><br>
     <input type="submit" value="Submit">
 </form>
-
-
-
