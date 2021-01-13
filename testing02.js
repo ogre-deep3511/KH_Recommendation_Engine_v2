@@ -18,7 +18,7 @@ app.use(bodyParser.urlencoded({extended: false}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 //Setting up neo4j authentication
-const driver = neo4j.driver('bolt://localhost:11007', neo4j.auth.basic('neo4j', '1241@deep'));
+const driver = neo4j.driver('bolt://localhost:7687', neo4j.auth.basic('neo4j', '1241@deep'));
 const session = driver.session();
 
 // This is for displaying all the user data, genre data and kahani data from the neo4j database
@@ -30,23 +30,23 @@ app.post('/popularity/recommendation', (req, res) => {
 
     var user_id = req.body.user_id;
     // var confirmation = req.body.confirmation
-    console.log(user_id);
+    // console.log(user_id);
 
     if(user_id) {
 
         session
-            .run('MATCH(a:Story), (b:TotalRating) where (a)-[:HAS_TOTAL_RATING]->(b) AND b.totalRating > 100 return a order by a.views_count desc limit 25')
+            .run('match(a:TrendingStories)<-[:NOW_TRENDING]-(s)-[:BELONGS_TO_KAHANI]->(k)-[:IS_OF_LANGUAGE]->(l)<-[:IS_OF_LANGUAGE]-(x)<-[:BELONGS_TO_KAHANI]-(y) return y limit 25')
             .then((result) => {
-                console.log("Started process 6");
-                var storiesByRatingArr = [];
-                // Inserting data into storiesByRatingArr 
+                console.log("Started trending-language-stories module");
+                var trendingStoriesArr = [];
+                // Inserting data into trendingStoriesArr 
                 result.records.forEach((record) => {
-                    storiesByRatingArr.push({
-                        title: record._fields[0].properties.title
+                    trendingStoriesArr.push({
+                        story_id: record._fields[0].properties.story_id
                     });
                 });
 
-                console.log(storiesByRatingArr);
+                console.log(trendingStoriesArr);
             })
             .catch((err) => {
                 console.log(err);

@@ -18,7 +18,7 @@ app.use(bodyParser.urlencoded({extended: false}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 //Setting up neo4j authentication
-const driver = neo4j.driver('bolt://localhost:11007', neo4j.auth.basic('neo4j', '1241@deep'));
+const driver = neo4j.driver('bolt://localhost:7687', neo4j.auth.basic('neo4j', '1241@deep'));
 const session = driver.session();
 
 // This is for displaying all the user data, genre data and kahani data from the neo4j database
